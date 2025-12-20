@@ -4,6 +4,8 @@ A modern AI chat application built using **Next.js 15**, **AI SDK v5**, **Groq/O
 
 It supports **authentication**, **tool calling**, **streaming responses**, and **persistent chat history**.
 
+**Production URL** - https://ai-assistant-flame-seven.vercel.app/
+
 ---
 
 ## ✨ Features
