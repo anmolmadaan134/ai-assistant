@@ -6,6 +6,10 @@ import {
 } from "ai";
 import { groq } from "@ai-sdk/groq";
 import { z } from "zod";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { chatMessages } from "@/lib/drizzle/schema";
 
 
 
@@ -67,49 +71,68 @@ const raceTool = tool({
   },
 });
 
+function extractTextFromMessage(message: any): string | null {
+  if (!message?.parts) return null;
+
+  return message.parts
+    .filter((p: any) => p.type === "text")
+    .map((p: any) => p.text)
+    .join(" ")
+    .trim() || null;
+}
+
 
 
 export async function POST(req: Request) {
-   let body: any = {};
+   const session = await getServerSession(authOptions);
 
-  try {
-    body = await req.json();
-  } catch {
-    body = {};
+  if (!session?.user?.id) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
-  
-  const uiMessages = Array.isArray(body.messages)
-    ? body.messages
-    : [];
+  const { messages } = await req.json();
 
-  
-  const modelMessages = convertToModelMessages(
-    uiMessages
-  );
+  // Saving last user message
+  const last = messages[messages.length - 1];
+  if (last?.role === "user") {
 
-    modelMessages.unshift({
-    role: "system",
-    content:
-      "You may ONLY use the tools provided. " +
-      "Do not attempt to call search, browse, or any external tools. " +
-      "Use stock ONLY for stock prices.",
-  });
+    const text = extractTextFromMessage(last)
 
-  console.log("UI messages:", uiMessages);
-console.log("Model messages:", modelMessages);
+    if(text){
+    await db.insert(chatMessages).values({
+      userId: session.user.id,
+      role: "user",
+      content: text,
+    });
+  }}
 
   const result = streamText({
-    model: groq("llama-3.3-70b-versatile"),
-    messages: modelMessages,
-    tools: {
+    model: groq("llama-3.1-8b-instant"),
+    messages: convertToModelMessages(messages),
+      tools: {
       weather: weatherTool,
       stock: stockTool,
       race: raceTool,
     },
-    stopWhen: stepCountIs(4),
   });
 
-  
-  return result.toUIMessageStreamResponse();
+  return result.toUIMessageStreamResponse({
+  onFinish: async ({ responseMessage }) => {
+    if (!responseMessage) return;
+
+    const text = responseMessage.parts
+      .filter((p) => p.type === "text")
+      .map((p) => p.text)
+      .join("")
+      .trim();
+
+    if (!text) return;
+
+    await db.insert(chatMessages).values({
+      userId: session.user.id,
+      role: "assistant",
+      content: text,
+    });
+  },
+});
 }

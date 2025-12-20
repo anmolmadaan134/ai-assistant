@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useState } from "react";
-
+import { signOut } from "next-auth/react";
 import WeatherCard from "./WeatherCard";
 import StockCard from "./StockCard";
 import RaceCard from "./RaceCard";
@@ -20,7 +20,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-export default function ChatUI() {
+type HistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+
+export default function ChatUI({history}:{history:HistoryMessage[]}) {
   const [input, setInput] = useState("");
 
   const { messages, sendMessage, status, error, stop } = useChat({
@@ -32,6 +38,8 @@ export default function ChatUI() {
   return (
     <div className="flex justify-center min-h-screen bg-muted/40 p-6">
       <Card className="w-full max-w-4xl flex flex-col shadow-xl">
+
+
         
         <CardHeader className="border-b bg-background">
           <div className="flex items-center justify-between">
@@ -42,8 +50,17 @@ export default function ChatUI() {
               </p>
             </div>
             <Badge variant="secondary">Live</Badge>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => signOut({ callbackUrl: "/" })}
+              >
+                Logout
+              </Button>
           </div>
         </CardHeader>
+
+         
 
         
         <CardContent className="flex-1 p-0">
@@ -55,6 +72,19 @@ export default function ChatUI() {
             )}
 
             <div className="space-y-6">
+
+               {history.map((m, i) => (
+                <div
+                  key={`history-${i}`}
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                    m.role === "user"
+                      ? "ml-auto bg-primary text-primary-foreground"
+                      : "bg-background border"
+                  }`}
+                >
+                  {m.content}
+                </div>
+              ))}
               {messages.map((message) => (
                 <div key={message.id} className="space-y-2">
                   {message.parts.map((part, index) => {
